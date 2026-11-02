@@ -107,6 +107,14 @@ installer_nftables() {
     nft -f /etc/nftables.conf
 }
 
+installer_journald() {
+    etape "journal systemd persistant (J3)"
+    install -d -o root -g root -m 0755 /etc/systemd/journald.conf.d
+    install -o root -g root -m 0644 "$CONFIG/journald.conf.d/persistant.conf" /etc/systemd/journald.conf.d/persistant.conf
+    # journald cree /var/log/journal et bascule en persistant au redemarrage
+    systemctl restart systemd-journald
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -119,6 +127,7 @@ main() {
     # partie 2
     installer_fail2ban
     installer_nftables
+    installer_journald
     # partie 3
     etape "terminé : lancer sudo verifier.sh"
 }

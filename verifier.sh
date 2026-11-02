@@ -296,6 +296,24 @@ test_J2_service() {
     fi
 }
 
+# J3
+
+test_J3_persistant() {
+    if [[ -d /var/log/journal ]]; then
+        ok "J3" "journal persistant : /var/log/journal present"
+    else
+        ko "J3" "/var/log/journal absent (journal non persistant)"
+    fi
+}
+
+test_J3_config() {
+    if systemd-analyze cat-config systemd/journald.conf 2>/dev/null | grep -qiE '^Storage=persistent'; then
+        ok "J3" "Storage=persistent dans la configuration journald"
+    else
+        ko "J3" "Storage n'est pas a 'persistent'"
+    fi
+}
+
 # partie 3
 
 main() {
