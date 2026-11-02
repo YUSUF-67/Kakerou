@@ -314,6 +314,40 @@ test_J3_config() {
     fi
 }
 
+# J4
+
+test_J4_seuil_haut() {
+    local s=/usr/local/sbin/analyse_logs.sh
+    if [[ -x $s ]] && "$s" -s 1000000 >/dev/null 2>&1; then
+        ok "J4" "analyse_logs.sh s'execute et n'alerte pas sous un seuil tres haut"
+    else
+        ko "J4" "analyse_logs.sh absent, non executable, ou alerte a tort"
+    fi
+}
+
+test_J4_seuil_zero() {
+    local s=/usr/local/sbin/analyse_logs.sh
+    [[ -x $s ]] || { ko "J4" "$s absent"; return; }
+    # on genere un echec reel (connexion avec un utilisateur inexistant, en loopback)
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=3 \
+        "verif_$$@127.0.0.1" true >/dev/null 2>&1
+    if "$s" -s 0 >/dev/null 2>&1; then
+        ko "J4" "seuil 0 : code de sortie 0 (attendu != 0)"
+    else
+        ok "J4" "seuil 0 : code de sortie != 0 (alerte declenchee)"
+    fi
+}
+
+test_J4_arguments() {
+    local s=/usr/local/sbin/analyse_logs.sh
+    [[ -x $s ]] || { ko "J4" "$s absent"; return; }
+    if "$s" -s abc >/dev/null 2>&1; then
+        ko "J4" "seuil non numerique accepte (validation insuffisante)"
+    else
+        ok "J4" "seuil non numerique rejete (validation stricte des arguments)"
+    fi
+}
+
 # partie 3
 
 main() {
