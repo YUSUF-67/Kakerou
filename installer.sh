@@ -6,7 +6,7 @@ set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$DEPOT/config"
-PAQUETS=(acl sudo openssh-server fail2ban nftables)
+PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades)
 # copies root:root 0755 hors du depot : personne d'autre ne peut les modifier
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
 
@@ -115,6 +115,14 @@ installer_journald() {
     systemctl restart systemd-journald
 }
 
+installer_maj_auto() {
+    etape "mises a jour de securite automatiques (D1)"
+    install -o root -g root -m 0644 "$CONFIG/apt/50unattended-upgrades" /etc/apt/apt.conf.d/50unattended-upgrades
+    install -o root -g root -m 0644 "$CONFIG/apt/20auto-upgrades" /etc/apt/apt.conf.d/20auto-upgrades
+    systemctl enable --now unattended-upgrades
+    systemctl enable --now apt-daily-upgrade.timer
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -128,6 +136,7 @@ main() {
     installer_fail2ban
     installer_nftables
     installer_journald
+    installer_maj_auto
     # partie 3
     etape "terminé : lancer sudo verifier.sh"
 }

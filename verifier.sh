@@ -348,6 +348,32 @@ test_J4_arguments() {
     fi
 }
 
+# D1
+
+test_D1_installe() {
+    if command -v unattended-upgrade >/dev/null && systemctl is-enabled --quiet apt-daily-upgrade.timer; then
+        ok "D1" "unattended-upgrades installe et timer apt-daily-upgrade actif"
+    else
+        ko "D1" "unattended-upgrades absent ou timer apt inactif"
+    fi
+}
+
+test_D1_active() {
+    if [[ $(apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null) == *'"1"'* ]]; then
+        ok "D1" "mises a jour automatiques activees (20auto-upgrades)"
+    else
+        ko "D1" "APT::Periodic::Unattended-Upgrade n'est pas a 1"
+    fi
+}
+
+test_D1_origines_kali() {
+    if apt-config dump Unattended-Upgrade::Origins-Pattern 2>/dev/null | grep -qi 'kali'; then
+        ok "D1" "Origins-Pattern cible bien les depots Kali"
+    else
+        ko "D1" "Origins-Pattern ne cible pas les depots Kali"
+    fi
+}
+
 # partie 3
 
 main() {
