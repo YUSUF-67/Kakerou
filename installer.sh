@@ -12,6 +12,8 @@ SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
 
 erreur() { echo "ERREUR : $*" >&2; exit 1; }
 etape()  { echo "==> $*"; }
+# admins lus dans le CSV : un groupe principal n'apparait pas dans getent group
+admins() { awk -F';' '$3 == "admins" { print $1 }' "$DEPOT/comptes.csv"; }
 
 installer_paquets() {
     etape "paquets : ${PAQUETS[*]}"
@@ -43,7 +45,7 @@ installer_sudo() {
 # sans cle admin, AllowGroups nous bloquerait dehors
 verifier_cle_admin() {
     local login home
-    for login in $(getent group admins | cut -d: -f4 | tr , ' '); do
+    for login in $(admins); do
         id -nG "$login" | grep -qw acces_ssh || continue
         home="$(getent passwd "$login" | cut -d: -f6)"
         [[ -s $home/.ssh/authorized_keys ]] && return 0
@@ -65,7 +67,7 @@ installer_ssh() {
 
 verifier_admin_mdp() {
     local login
-    for login in $(getent group admins | cut -d: -f4 | tr , ' '); do
+    for login in $(admins); do
         [[ $(passwd -S "$login" | awk '{print $2}') == P ]] && return 0
     done
     return 1

@@ -59,7 +59,7 @@ creer_compte() {
 # mot de passe admin pour sudo, demande a la console (jamais dans le depot)
 demander_mdp_admins() {
     local login
-    for login in $(getent group admins | cut -d: -f4 | tr , ' '); do
+    for login in $(awk -F';' '$3 == "admins" { print $1 }' "$CSV"); do
         if [[ $(passwd -S "$login" | awk '{print $2}') != P ]]; then
             if [[ -t 0 ]]; then
                 info "définir le mot de passe de l'administrateur $login"

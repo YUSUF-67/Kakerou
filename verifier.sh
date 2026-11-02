@@ -145,7 +145,7 @@ test_C3_support() {
 
 test_C3_aucun_autre() {
     local u admins trop=""
-    admins=" $(getent group admins | cut -d: -f4 | tr , ' ') support "
+    admins=" $(lignes_csv | awk -F';' '$3 == "admins" { printf "%s ", $1 }') support "
     for u in $(comptes_humains); do
         [[ $admins == *" $u "* ]] && continue
         sudo -l -U "$u" 2>/dev/null | grep -q 'is not allowed to run sudo' || trop+=" $u"
