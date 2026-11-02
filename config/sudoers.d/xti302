@@ -1,0 +1,3 @@
+# C3
+%admins ALL=(ALL:ALL) ALL
+support ALL=(root) NOPASSWD: /usr/local/sbin/analyse_logs.sh
