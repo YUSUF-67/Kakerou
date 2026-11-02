@@ -6,7 +6,7 @@ set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$DEPOT/config"
-PAQUETS=(acl sudo openssh-server)
+PAQUETS=(acl sudo openssh-server fail2ban)
 # copies root:root 0755 hors du depot : personne d'autre ne peut les modifier
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
 
@@ -88,6 +88,16 @@ restreindre_root_et_sudo() {
     chmod go-rwx /home/*/
 }
 
+# --- partie 2 : journaux et defense ---
+
+installer_fail2ban() {
+    etape "fail2ban : protection SSH contre le bruteforce (J1)"
+    install -d -o root -g root -m 0755 /etc/fail2ban/jail.d
+    install -o root -g root -m 0644 "$CONFIG/fail2ban/jail.d/sshd.conf" /etc/fail2ban/jail.d/sshd.conf
+    systemctl enable fail2ban
+    systemctl restart fail2ban
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -98,6 +108,7 @@ main() {
     installer_ssh
     restreindre_root_et_sudo
     # partie 2
+    installer_fail2ban
     # partie 3
     etape "terminé : lancer sudo verifier.sh"
 }

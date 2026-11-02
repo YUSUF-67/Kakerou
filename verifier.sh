@@ -248,6 +248,28 @@ test_S5() {
 }
 
 # partie 2
+
+# J1
+
+test_J1_service() {
+    if systemctl is-active --quiet fail2ban && fail2ban-client status sshd >/dev/null 2>&1; then
+        ok "J1" "fail2ban actif et jail sshd en place"
+    else
+        ko "J1" "fail2ban inactif ou jail sshd absente"
+    fi
+}
+
+test_J1_parametres() {
+    local maxretry actions
+    maxretry=$(fail2ban-client get sshd maxretry 2>/dev/null)
+    actions=$(fail2ban-client get sshd actions 2>/dev/null)
+    if [[ -n $maxretry && $maxretry -le 5 ]] && echo "$actions" | grep -qi nft; then
+        ok "J1" "maxretry=$maxretry et bannissement via nftables"
+    else
+        ko "J1" "parametres J1 incorrects (maxretry=${maxretry:-?}, actions=${actions:-aucune})"
+    fi
+}
+
 # partie 3
 
 main() {
