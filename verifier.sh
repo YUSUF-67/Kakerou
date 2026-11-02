@@ -18,7 +18,8 @@ ko() { echo "[KO] $1 $2"; TOTAL=$((TOTAL + 1)); }
 lignes_csv() { tail -n +2 "$CSV" | tr -d '\r' | grep -v '^$'; }
 membre() { lignes_csv | awk -F';' -v g="$1" '$3 == g { print $1; exit }'; }
 comptes_humains() { getent passwd | awk -F: '$3 >= 1000 && $3 < 65534 { print $1 }'; }
-sshd_val() { sshd -T 2>/dev/null | awk -v k="$1" '$1 == k { $1 = ""; sub(/^ /, ""); print; exit }'; }
+# OpenSSH 10 ecrit les cles de sshd -T en CamelCase
+sshd_val() { sshd -T 2>/dev/null | awk -v k="$1" 'tolower($1) == k { $1 = ""; sub(/^ /, ""); print; exit }'; }
 
 # C1
 
@@ -104,7 +105,7 @@ test_C2_clients() {
 test_C2_acl_defaut() {
     local d sans=""
     for d in /srv/projets /srv/projets/externe /srv/maquettes /srv/clients; do
-        getfacl -pd "$d" 2>/dev/null | grep -q '^default:group:' || sans+=" $d"
+        getfacl -p "$d" 2>/dev/null | grep -q '^default:group:' || sans+=" $d"
     done
     if [[ -z $sans ]]; then ok "C2" "ACL par défaut présentes sur /srv"
     else ko "C2" "pas d'ACL par défaut :$sans"; fi
@@ -113,7 +114,9 @@ test_C2_acl_defaut() {
 test_C2_heritage() {
     local dev design com f
     dev=$(membre dev); design=$(membre design); com=$(membre commercial)
-    f=$(sudo -u "$dev" mktemp -p /srv/projets .verifier.XXXXXX 2>/dev/null) \
+    # touch et pas mktemp : mktemp cree en 0600, ce qui masquerait l'heritage
+    f="/srv/projets/.verifier.$$"
+    sudo -u "$dev" touch "$f" 2>/dev/null \
         || { ko "C2" "$dev ne peut pas créer de fichier dans /srv/projets"; return; }
     if sudo -u "$design" test -r "$f" && ! sudo -u "$design" test -w "$f" && ! sudo -u "$com" test -r "$f"; then
         ok "C2" "nouveau fichier de /srv/projets : design lit, commercial refusé"
