@@ -102,16 +102,14 @@ installer_nftables() {
     etape "pare-feu nftables : politique drop sauf SSH (J2)"
     nft -c -f "$CONFIG/nftables.conf" || erreur "config/nftables.conf invalide"
     install -o root -g root -m 0644 "$CONFIG/nftables.conf" /etc/nftables.conf
-    systemctl enable nftables          # chargement au demarrage (survit au reboot)
-    # application immediate SANS flush : les bans fail2ban (inet f2b-table) restent
-    nft -f /etc/nftables.conf
+    systemctl enable nftables
+    nft -f /etc/nftables.conf          # sans flush : bans fail2ban preserves
 }
 
 installer_journald() {
     etape "journal systemd persistant (J3)"
     install -d -o root -g root -m 0755 /etc/systemd/journald.conf.d
     install -o root -g root -m 0644 "$CONFIG/journald.conf.d/persistant.conf" /etc/systemd/journald.conf.d/persistant.conf
-    # journald cree /var/log/journal et bascule en persistant au redemarrage
     systemctl restart systemd-journald
 }
 

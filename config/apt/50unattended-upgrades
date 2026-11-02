@@ -1,14 +1,6 @@
-// D1 - mises a jour de securite automatiques (unattended-upgrades).
-// Kali est une distribution "rolling" : il n'existe pas de depot
-// "Debian-Security". Les correctifs arrivent par le depot Kali lui-meme
-// (Origin=Kali, suite/codename kali-rolling), comme le montre apt-cache policy.
-// On cible donc ce depot via Origins-Pattern.
+// D1 - Kali n'a pas de depot "Debian-Security" : on cible le depot Kali
 Unattended-Upgrade::Origins-Pattern {
         "origin=Kali,codename=kali-rolling";
 };
-
-// On ne redemarre pas la machine automatiquement (serveur).
 Unattended-Upgrade::Automatic-Reboot "false";
-
-// Une VM est parfois vue "sur batterie" : sans cela les MAJ seraient sautees.
 Unattended-Upgrade::OnlyOnACPower "false";

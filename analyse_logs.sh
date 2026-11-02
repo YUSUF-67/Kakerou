@@ -1,8 +1,6 @@
 #!/bin/bash
-# J4 - analyse les connexions SSH (journalctl -u <unite>) et produit un rapport :
-#   echecs d'authentification par IP, comptes vises, connexions reussies.
-# Renvoie un code != 0 si une IP depasse le seuil d'alerte (brute-force probable).
-# Lance en root via sudo par le compte support : arguments valides strictement.
+# J4 - rapport des connexions SSH (echecs par IP, comptes vises, succes).
+# Code de sortie != 0 si une IP depasse le seuil. Lance en root via sudo (support).
 # usage : analyse_logs.sh [-s seuil] [-u unite]
 
 set -euo pipefail
@@ -21,7 +19,7 @@ EOF
     exit 2
 }
 
-# --- validation stricte des arguments (script root via sudo : aucune injection) ---
+# validation stricte des arguments (tourne en root, aucune injection)
 while getopts ':s:u:h' opt; do
     case $opt in
         s) SEUIL=$OPTARG ;;
@@ -37,12 +35,11 @@ shift $((OPTIND - 1))
 [[ $UNITE =~ ^[A-Za-z0-9._@-]+$ ]] || erreur "unite invalide : '$UNITE'"
 [[ $EUID -eq 0 ]] || erreur "ce script doit etre lance en root (via sudo)"
 
-# --- lecture du journal une seule fois (-o cat : uniquement le message) ---
+# lecture du journal (-o cat : message seul)
 journal="$(journalctl -u "$UNITE" --no-pager -o cat 2>/dev/null || true)"
 
-# --- analyse et rapport ; code de sortie 1 si au moins une IP depasse le seuil ---
 awk -v seuil="$SEUIL" -v unite="$UNITE" '
-    BEGIN { PROCINFO["sorted_in"] = "@val_num_desc" }   # tri par nombre decroissant (gawk)
+    BEGIN { PROCINFO["sorted_in"] = "@val_num_desc" }   # tri decroissant (gawk)
 
     # echec : nom d utilisateur inconnu
     /^Invalid user [^ ]+ from / { ech[$5]++; cible[$3]++; nech++; next }
