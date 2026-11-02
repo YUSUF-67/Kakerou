@@ -270,6 +270,32 @@ test_J1_parametres() {
     fi
 }
 
+# J2
+
+test_J2_politique() {
+    if nft list chain inet filtre entree 2>/dev/null | grep -q 'policy drop'; then
+        ok "J2" "politique par defaut drop en entree"
+    else
+        ko "J2" "pas de politique drop sur l'entree"
+    fi
+}
+
+test_J2_ssh_ouvert() {
+    if nft list chain inet filtre entree 2>/dev/null | grep -qE 'tcp dport 22 accept'; then
+        ok "J2" "SSH (22/tcp) autorise en entree"
+    else
+        ko "J2" "la regle d'acceptation SSH est absente"
+    fi
+}
+
+test_J2_service() {
+    if systemctl is-enabled --quiet nftables; then
+        ok "J2" "nftables active au demarrage (survit au reboot)"
+    else
+        ko "J2" "nftables non active au demarrage"
+    fi
+}
+
 # partie 3
 
 main() {

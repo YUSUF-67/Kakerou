@@ -6,7 +6,7 @@ set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$DEPOT/config"
-PAQUETS=(acl sudo openssh-server fail2ban)
+PAQUETS=(acl sudo openssh-server fail2ban nftables)
 # copies root:root 0755 hors du depot : personne d'autre ne peut les modifier
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
 
@@ -98,6 +98,15 @@ installer_fail2ban() {
     systemctl restart fail2ban
 }
 
+installer_nftables() {
+    etape "pare-feu nftables : politique drop sauf SSH (J2)"
+    nft -c -f "$CONFIG/nftables.conf" || erreur "config/nftables.conf invalide"
+    install -o root -g root -m 0644 "$CONFIG/nftables.conf" /etc/nftables.conf
+    systemctl enable nftables          # chargement au demarrage (survit au reboot)
+    # application immediate SANS flush : les bans fail2ban (inet f2b-table) restent
+    nft -f /etc/nftables.conf
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -109,6 +118,7 @@ main() {
     restreindre_root_et_sudo
     # partie 2
     installer_fail2ban
+    installer_nftables
     # partie 3
     etape "terminé : lancer sudo verifier.sh"
 }
