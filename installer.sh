@@ -172,6 +172,12 @@ fermer_services() {
     [[ ${#unites[@]} -eq 0 ]] || systemctl mask --now "${unites[@]}"
 }
 
+corriger_permissions() {
+    etape "aucun fichier modifiable par tous hors /tmp et /var/tmp (D3)"
+    # -xdev : / seulement, sans /proc, /sys, /dev, /run ni /sauvegardes
+    find / -xdev \( -path /tmp -o -path /var/tmp \) -prune -o -type f -perm -0002 -print -exec chmod o-w {} +
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -191,6 +197,7 @@ main() {
     proteger_sauvegardes
     installer_timer
     fermer_services
+    corriger_permissions
     etape "terminé : lancer sudo verifier.sh"
 }
 
