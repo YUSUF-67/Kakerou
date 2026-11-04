@@ -248,6 +248,132 @@ test_S5() {
 }
 
 # partie 2
+
+# J1
+
+test_J1_service() {
+    if systemctl is-active --quiet fail2ban && fail2ban-client status sshd >/dev/null 2>&1; then
+        ok "J1" "fail2ban actif et jail sshd en place"
+    else
+        ko "J1" "fail2ban inactif ou jail sshd absente"
+    fi
+}
+
+test_J1_parametres() {
+    local maxretry actions
+    maxretry=$(fail2ban-client get sshd maxretry 2>/dev/null)
+    actions=$(fail2ban-client get sshd actions 2>/dev/null)
+    if [[ -n $maxretry && $maxretry -le 5 ]] && echo "$actions" | grep -qi nft; then
+        ok "J1" "maxretry=$maxretry et bannissement via nftables"
+    else
+        ko "J1" "parametres J1 incorrects (maxretry=${maxretry:-?}, actions=${actions:-aucune})"
+    fi
+}
+
+# J2
+
+test_J2_politique() {
+    if nft list chain inet filtre entree 2>/dev/null | grep -q 'policy drop'; then
+        ok "J2" "politique par defaut drop en entree"
+    else
+        ko "J2" "pas de politique drop sur l'entree"
+    fi
+}
+
+test_J2_ssh_ouvert() {
+    if nft list chain inet filtre entree 2>/dev/null | grep -qE 'tcp dport 22 accept'; then
+        ok "J2" "SSH (22/tcp) autorise en entree"
+    else
+        ko "J2" "la regle d'acceptation SSH est absente"
+    fi
+}
+
+test_J2_service() {
+    if systemctl is-enabled --quiet nftables; then
+        ok "J2" "nftables active au demarrage (survit au reboot)"
+    else
+        ko "J2" "nftables non active au demarrage"
+    fi
+}
+
+# J3
+
+test_J3_persistant() {
+    if [[ -d /var/log/journal ]]; then
+        ok "J3" "journal persistant : /var/log/journal present"
+    else
+        ko "J3" "/var/log/journal absent (journal non persistant)"
+    fi
+}
+
+test_J3_config() {
+    if systemd-analyze cat-config systemd/journald.conf 2>/dev/null | grep -qiE '^Storage=persistent'; then
+        ok "J3" "Storage=persistent dans la configuration journald"
+    else
+        ko "J3" "Storage n'est pas a 'persistent'"
+    fi
+}
+
+# J4
+
+test_J4_seuil_haut() {
+    local s=/usr/local/sbin/analyse_logs.sh
+    if [[ -x $s ]] && "$s" -s 1000000 >/dev/null 2>&1; then
+        ok "J4" "analyse_logs.sh s'execute et n'alerte pas sous un seuil tres haut"
+    else
+        ko "J4" "analyse_logs.sh absent, non executable, ou alerte a tort"
+    fi
+}
+
+test_J4_seuil_zero() {
+    local s=/usr/local/sbin/analyse_logs.sh
+    [[ -x $s ]] || { ko "J4" "$s absent"; return; }
+    # on genere un echec reel (connexion avec un utilisateur inexistant, en loopback)
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=3 \
+        "verif_$$@127.0.0.1" true >/dev/null 2>&1
+    if "$s" -s 0 >/dev/null 2>&1; then
+        ko "J4" "seuil 0 : code de sortie 0 (attendu != 0)"
+    else
+        ok "J4" "seuil 0 : code de sortie != 0 (alerte declenchee)"
+    fi
+}
+
+test_J4_arguments() {
+    local s=/usr/local/sbin/analyse_logs.sh
+    [[ -x $s ]] || { ko "J4" "$s absent"; return; }
+    if "$s" -s abc >/dev/null 2>&1; then
+        ko "J4" "seuil non numerique accepte (validation insuffisante)"
+    else
+        ok "J4" "seuil non numerique rejete (validation stricte des arguments)"
+    fi
+}
+
+# D1
+
+test_D1_installe() {
+    if command -v unattended-upgrade >/dev/null && systemctl is-enabled --quiet apt-daily-upgrade.timer; then
+        ok "D1" "unattended-upgrades installe et timer apt-daily-upgrade actif"
+    else
+        ko "D1" "unattended-upgrades absent ou timer apt inactif"
+    fi
+}
+
+test_D1_active() {
+    if [[ $(apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null) == *'"1"'* ]]; then
+        ok "D1" "mises a jour automatiques activees (20auto-upgrades)"
+    else
+        ko "D1" "APT::Periodic::Unattended-Upgrade n'est pas a 1"
+    fi
+}
+
+test_D1_origines_kali() {
+    if apt-config dump Unattended-Upgrade::Origins-Pattern 2>/dev/null | grep -qi 'kali'; then
+        ok "D1" "Origins-Pattern cible bien les depots Kali"
+    else
+        ko "D1" "Origins-Pattern ne cible pas les depots Kali"
+    fi
+}
+
 # partie 3
 
 main() {

@@ -1,0 +1,6 @@
+// D1 - Kali n'a pas de depot "Debian-Security" : on cible le depot Kali
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Kali,codename=kali-rolling";
+};
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::OnlyOnACPower "false";

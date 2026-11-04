@@ -6,7 +6,7 @@ set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$DEPOT/config"
-PAQUETS=(acl sudo openssh-server)
+PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades)
 # copies root:root 0755 hors du depot : personne d'autre ne peut les modifier
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
 
@@ -88,6 +88,39 @@ restreindre_root_et_sudo() {
     chmod go-rwx /home/*/
 }
 
+# --- partie 2 : journaux et defense ---
+
+installer_fail2ban() {
+    etape "fail2ban : protection SSH contre le bruteforce (J1)"
+    install -d -o root -g root -m 0755 /etc/fail2ban/jail.d
+    install -o root -g root -m 0644 "$CONFIG/fail2ban/jail.d/sshd.conf" /etc/fail2ban/jail.d/sshd.conf
+    systemctl enable fail2ban
+    systemctl restart fail2ban
+}
+
+installer_nftables() {
+    etape "pare-feu nftables : politique drop sauf SSH (J2)"
+    nft -c -f "$CONFIG/nftables.conf" || erreur "config/nftables.conf invalide"
+    install -o root -g root -m 0644 "$CONFIG/nftables.conf" /etc/nftables.conf
+    systemctl enable nftables
+    nft -f /etc/nftables.conf          # sans flush : bans fail2ban preserves
+}
+
+installer_journald() {
+    etape "journal systemd persistant (J3)"
+    install -d -o root -g root -m 0755 /etc/systemd/journald.conf.d
+    install -o root -g root -m 0644 "$CONFIG/journald.conf.d/persistant.conf" /etc/systemd/journald.conf.d/persistant.conf
+    systemctl restart systemd-journald
+}
+
+installer_maj_auto() {
+    etape "mises a jour de securite automatiques (D1)"
+    install -o root -g root -m 0644 "$CONFIG/apt/50unattended-upgrades" /etc/apt/apt.conf.d/50unattended-upgrades
+    install -o root -g root -m 0644 "$CONFIG/apt/20auto-upgrades" /etc/apt/apt.conf.d/20auto-upgrades
+    systemctl enable --now unattended-upgrades
+    systemctl enable --now apt-daily-upgrade.timer
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -98,6 +131,10 @@ main() {
     installer_ssh
     restreindre_root_et_sudo
     # partie 2
+    installer_fail2ban
+    installer_nftables
+    installer_journald
+    installer_maj_auto
     # partie 3
     etape "terminé : lancer sudo verifier.sh"
 }

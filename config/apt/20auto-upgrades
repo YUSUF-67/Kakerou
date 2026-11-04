@@ -1,0 +1,3 @@
+// D1 - active les mises a jour automatiques (timer apt-daily-upgrade)
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
