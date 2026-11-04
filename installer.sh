@@ -6,9 +6,11 @@ set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$DEPOT/config"
-PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades)
+PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades rsync)
 # copies root:root 0755 hors du depot : personne d'autre ne peut les modifier
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
+DISQUE=/dev/sdb
+SAUVEGARDES=/sauvegardes
 
 erreur() { echo "ERREUR : $*" >&2; exit 1; }
 etape()  { echo "==> $*"; }
@@ -121,6 +123,27 @@ installer_maj_auto() {
     systemctl enable --now apt-daily-upgrade.timer
 }
 
+# --- partie 3 : sauvegarde et systeme ---
+
+preparer_disque() {
+    etape "second disque $DISQUE monté sur $SAUVEGARDES (B1)"
+    [[ -b $DISQUE ]] || erreur "$DISQUE absent : ajouter le disque de 2 Go à la VM"
+    # blkid echoue sur un disque vierge : on ne formate jamais un disque deja utilise
+    if ! blkid "$DISQUE" >/dev/null; then
+        mkfs.ext4 -q -L sauvegardes "$DISQUE"
+    fi
+    local uuid type
+    uuid="$(blkid -s UUID -o value "$DISQUE" || true)"
+    type="$(blkid -s TYPE -o value "$DISQUE" || true)"
+    [[ -n $uuid && -n $type ]] || erreur "$DISQUE contient des partitions ou un format inconnu : non modifié"
+    mkdir -p "$SAUVEGARDES"
+    # UUID : stable meme si le disque change de nom ; nofail : demarrage meme sans le disque
+    sed -i "\|[[:space:]]$SAUVEGARDES[[:space:]]|d" /etc/fstab
+    echo "UUID=$uuid $SAUVEGARDES $type defaults,nofail,nodev,nosuid,noexec 0 2" >> /etc/fstab
+    systemctl daemon-reload
+    mountpoint -q "$SAUVEGARDES" || mount "$SAUVEGARDES"
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -136,6 +159,7 @@ main() {
     installer_journald
     installer_maj_auto
     # partie 3
+    preparer_disque
     etape "terminé : lancer sudo verifier.sh"
 }
 
