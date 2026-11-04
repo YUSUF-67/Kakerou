@@ -11,6 +11,9 @@ PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades rsync)
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
 DISQUE=/dev/sdb
 SAUVEGARDES=/sauvegardes
+# services reseau parfois presents sur Kali, inutiles pour un serveur de fichiers
+INUTILES=(apache2 nginx postgresql mariadb redis-server smbd nmbd rpcbind
+          avahi-daemon cups cups-browsed exim4 postfix xrdp vsftpd snmpd)
 
 erreur() { echo "ERREUR : $*" >&2; exit 1; }
 etape()  { echo "==> $*"; }
@@ -160,6 +163,15 @@ installer_timer() {
     systemctl start sauvegarde.service
 }
 
+fermer_services() {
+    etape "services réseau inutiles arrêtés et masqués (D2)"
+    local unites
+    # seulement les unites installees : masquer une unite absente creerait un lien inutile
+    mapfile -t unites < <(systemctl list-unit-files --no-legend "${INUTILES[@]/%/.service}" "${INUTILES[@]/%/.socket}" | awk '{ print $1 }')
+    # mask : ni demarrage, ni activation par socket ou dbus
+    [[ ${#unites[@]} -eq 0 ]] || systemctl mask --now "${unites[@]}"
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -178,6 +190,7 @@ main() {
     preparer_disque
     proteger_sauvegardes
     installer_timer
+    fermer_services
     etape "terminé : lancer sudo verifier.sh"
 }
 
