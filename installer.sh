@@ -141,7 +141,7 @@ preparer_disque() {
     [[ -n $uuid && -n $type ]] || erreur "$DISQUE contient des partitions ou un format inconnu : non modifié"
     mkdir -p "$SAUVEGARDES"
     # UUID : stable meme si le disque change de nom ; nofail : demarrage meme sans le disque
-    sed -i "\|[[:space:]]$SAUVEGARDES[[:space:]]|d" /etc/fstab
+    sed -i "\|[[:space:]]${SAUVEGARDES}[[:space:]]|d" /etc/fstab
     echo "UUID=$uuid $SAUVEGARDES $type defaults,nofail,nodev,nosuid,noexec 0 2" >> /etc/fstab
     systemctl daemon-reload
     mountpoint -q "$SAUVEGARDES" || mount "$SAUVEGARDES"
