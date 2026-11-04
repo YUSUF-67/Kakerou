@@ -144,6 +144,13 @@ preparer_disque() {
     mountpoint -q "$SAUVEGARDES" || mount "$SAUVEGARDES"
 }
 
+proteger_sauvegardes() {
+    etape "$SAUVEGARDES réservé aux administrateurs (B3)"
+    # admins lisent sans sudo, seul root ecrit ; les autres ne traversent pas
+    chown root:admins "$SAUVEGARDES"
+    chmod 0750 "$SAUVEGARDES"
+}
+
 installer_timer() {
     etape "sauvegarde planifiée chaque nuit, journalisée (B2)"
     install -o root -g root -m 0644 "$CONFIG"/systemd/sauvegarde.{service,timer} /etc/systemd/system/
@@ -169,6 +176,7 @@ main() {
     installer_maj_auto
     # partie 3
     preparer_disque
+    proteger_sauvegardes
     installer_timer
     etape "terminé : lancer sudo verifier.sh"
 }
