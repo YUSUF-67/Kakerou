@@ -144,6 +144,15 @@ preparer_disque() {
     mountpoint -q "$SAUVEGARDES" || mount "$SAUVEGARDES"
 }
 
+installer_timer() {
+    etape "sauvegarde planifiée chaque nuit, journalisée (B2)"
+    install -o root -g root -m 0644 "$CONFIG"/systemd/sauvegarde.{service,timer} /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable --now sauvegarde.timer
+    # premiere version tout de suite, sans attendre 2h
+    systemctl start sauvegarde.service
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -160,6 +169,7 @@ main() {
     installer_maj_auto
     # partie 3
     preparer_disque
+    installer_timer
     etape "terminé : lancer sudo verifier.sh"
 }
 

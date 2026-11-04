@@ -1,0 +1,9 @@
+# B1, B2 - lance par sauvegarde.timer, sortie dans le journal (journalctl -u sauvegarde)
+[Unit]
+Description=Sauvegarde incrementale de /srv et /etc
+RequiresMountsFor=/sauvegardes
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/sauvegarde.sh
+SyslogIdentifier=sauvegarde
