@@ -5,28 +5,34 @@ contexte A agence web Pixelia, VM Kali dans VirtualBox
 
 1. Tableau de conformité  
 
-pour chaque exigence : ce qu'on a fait / les tests de verifier.sh / la reco ANSSI si on en a trouvé une (guide BP-028 v2 et guide OpenSSH)  
+pour chaque exigence ce qu'on a fait, les tests de verifier.sh (toutes les fonctions test_<ID>_...) et la reco ANSSI si on en a trouvé une (guide BP-028 v2 et guide OpenSSH)
 
-C1 : creer_comptes.sh lit comptes.csv, crée les groupes et comptes seulement si ils existent pas, freelance expire le 31/01/2027 / test_C1_comptes test_C1_groupes_metier test_C1_freelance_expiration / R30  
-C2 : /srv en root:root 0770 plus ACL d'acces et ACL par defaut avec setfacl --set / test_C2_projets test_C2_externe test_C2_maquettes test_C2_clients test_C2_acl_defaut test_C2_heritage / R50  
-C3 : sudoers.d/xti302 verifié par visudo, admins ont tout, support juste analyse_logs.sh, groupes sudo et kali-trusted vidés / test_C3_admins test_C3_support test_C3_aucun_autre test_C3_script_root / R39 a R44  
-C4 : root verrouillé, homes en 700 / test_C4_root test_C4_homes / R33  
-S1 : clé seulement, mot de passe refusé / test_S1_config test_S1_methodes / guide OpenSSH  
-S2 : PermitRootLogin no / test_S2 / guide OpenSSH  
-S3 : AllowGroups acces_ssh / test_S3 / guide OpenSSH  
-S4 : MaxAuthTries 3 et ChannelTimeout 10 min / test_S4_essais test_S4_inactivite / R32  
-S5 : config dans sshd_config.d/10-durcissement.conf, sshd -t avant le restart / test_S5  
-J1 : fail2ban sur sshd, 4 echecs en 10 min = ban 15 min / test_J1_service test_J1_parametres  
-J2 : nftables en drop sauf lo, connexions établies, port 22 et icmp, actif au boot / test_J2_politique test_J2_ssh_ouvert test_J2_service / R65 ? (a confirmer)  
-J3 : journal persistant / test_J3_persistant test_J3_config / R71  
-J4 : analyse_logs.sh, echecs par IP comptes visés connexions réussies, code different de 0 au dessus du seuil / test_J4_seuil_haut test_J4_seuil_zero test_J4_arguments / R71  
-D1 : unattended-upgrades sur les depots kali / test_D1_installe test_D1_active test_D1_origines_kali / R61  
-B1 : rsync --link-dest vers une version datée sur le 2e disque, 7 versions gardées / test_B1_montage test_B1_versions test_B1_incrementale test_B1_acl  
-B2 : timer systemd tout les jours a 2h, logs dans journalctl / test_B2_timer test_B2_journal  
-B3 : /sauvegardes en root:admins 0750 / test_B3_droits test_B3_acces / R50  
-B4 : restauration testée, voir partie 4 / test_B4_fichier test_B4_acl  
-D2 : seul le port 22 ecoute, services inutiles masqués / test_D2_ssh test_D2_autres / R62  
-D3 : plus de fichier modifiable par tous hors /tmp, SUID listés en dessous / test_D3_modifiables test_D3_suid test_D3_suid_donnees / R54 R56 R57  
+```
+ID  | ce qu'on a fait                                          | tests             | ANSSI
+----+----------------------------------------------------------+-------------------+-----------
+C1  | comptes créés depuis comptes.csv, idempotent             | test_C1_* (3)     | R30
+    | freelance expire le 31/01/2027                           |                   |
+C2  | /srv en 0770 + ACL et ACL par defaut (setfacl --set)     | test_C2_* (6)     | R50
+C3  | admins sudo complet, support juste analyse_logs.sh       | test_C3_* (4)     | R39 a R44
+    | groupes sudo et kali-trusted vidés                       |                   |
+C4  | root verrouillé, homes en 700                            | test_C4_* (2)     | R33
+S1  | clé seulement, mot de passe refusé                       | test_S1_* (2)     | OpenSSH
+S2  | PermitRootLogin no                                       | test_S2           | OpenSSH
+S3  | AllowGroups acces_ssh                                    | test_S3           | OpenSSH
+S4  | MaxAuthTries 3, ChannelTimeout 10 min                    | test_S4_* (2)     | R32
+S5  | sshd_config.d/10-durcissement.conf + sshd -t            | test_S5           |
+J1  | fail2ban sshd, 4 echecs en 10 min = 15 min de ban        | test_J1_* (2)     |
+J2  | nftables drop sauf lo, établies, 22 et icmp              | test_J2_* (3)     | R65 ?
+J3  | journal persistant                                       | test_J3_* (2)     | R71
+J4  | analyse_logs.sh, seuil 10 par defaut (-s)                | test_J4_* (3)     | R71
+D1  | unattended-upgrades sur les depots kali                  | test_D1_* (3)     | R61
+B1  | rsync --link-dest, versions datées, 7 gardées            | test_B1_* (4)     |
+B2  | timer systemd a 2h, logs dans journalctl                 | test_B2_* (2)     |
+B3  | /sauvegardes en root:admins 0750                         | test_B3_* (2)     | R50
+B4  | restauration testée (partie 4)                           | test_B4_* (2)     |
+D2  | que le port 22 en ecoute, services inutiles masqués      | test_D2_* (2)     | R62
+D3  | plus de o+w hors /tmp, SUID listés plus bas              | test_D3_* (3)     | R54 R56 R57
+```
 
 dernier passage depuis le snapshot vierge-propre : 76 / 76. il faut lancer sauvegarde.sh une fois apres installer.sh sinon test_B1_incrementale est KO (il faut 2 versions pour comparer)  
 les numeros ANSSI on les a pas tous recoupés, ceux avec un ? sont a vérifier  
