@@ -10,22 +10,22 @@ pour chaque exigence ce qu'on a fait, le ou les tests de verifier.sh et la reco 
 | ID | ce qu'on a fait | test verifier.sh | ANSSI |
 |---|---|---|---|
 | C1 | creer_comptes.sh lit comptes.csv, vérifie l'en-tête et les logins, crée groupes et comptes seulement s'ils existent pas, usermod -G remet les groupes comme dans le csv. les freelance expirent le 31/01/2027 avec chage -E | test_C1_comptes test_C1_groupes_metier test_C1_freelance_expiration | R30 |
-| C2 | dossiers de /srv en root:root 0770 + ACL d'accès et ACL par défaut posées avec setfacl --set | test_C2_projets test_C2_externe test_C2_maquettes test_C2_clients test_C2_acl_defaut test_C2_heritage | R50 |
-| C3 | config/sudoers.d/xti302 vérifié par visudo -c, %admins a tout, support a seulement /usr/local/sbin/analyse_logs.sh. installer.sh vide les groupes sudo et kali-trusted | test_C3_admins test_C3_support test_C3_aucun_autre test_C3_script_root | R39 a R44 |
-| C4 | passwd -l root, homes en 700 | test_C4_root test_C4_homes | R33 |
-| S1 | PasswordAuthentication no, KbdInteractiveAuthentication no, PubkeyAuthentication yes | test_S1_config test_S1_methodes | guide OpenSSH, authentification par clé |
+| C2 | dossiers de /srv en root:root 0770 + ACL d'accès et ACL par défaut posées avec setfacl --set | test_C2_projets test_C2_maquettes test_C2_acl_defaut | R50 |
+| C3 | config/sudoers.d/xti302 vérifié par visudo -c, %admins a tout, support a seulement /usr/local/sbin/analyse_logs.sh. installer.sh vide les groupes sudo et kali-trusted | test_C3_admins test_C3_support test_C3_aucun_autre | R39 a R44 |
+| C4 | passwd -l root, homes en 700 | test_C4 | R33 |
+| S1 | PasswordAuthentication no, KbdInteractiveAuthentication no, PubkeyAuthentication yes | test_S1 | guide OpenSSH, authentification par clé |
 | S2 | PermitRootLogin no | test_S2 | guide OpenSSH |
 | S3 | AllowGroups acces_ssh | test_S3 | guide OpenSSH, restreindre les utilisateurs |
-| S4 | MaxAuthTries 3, ChannelTimeout session=10m | test_S4_essais test_S4_inactivite | R32 |
+| S4 | MaxAuthTries 3, ChannelTimeout session=10m | test_S4 | R32 |
 | S5 | fichier config/ssh/sshd_config.d/10-durcissement.conf, sshd -t avant le restart sinon le fichier est retiré | test_S5 | |
-| J1 | fail2ban jail sshd, backend systemd, banaction nftables, 4 essais en 10 min = 15 min de ban | test_J1_service test_J1_parametres | |
-| J2 | config/nftables.conf, entrée et transfert en drop sauf lo, connexions établies, port 22 et icmp. service nftables activé au boot | test_J2_politique test_J2_ssh_ouvert test_J2_service | R65? (pare-feu local, a confirmer) |
-| J3 | Storage=persistent dans journald.conf.d | test_J3_persistant test_J3_config | R71 |
+| J1 | fail2ban jail sshd, backend systemd, banaction nftables, 4 essais en 10 min = 15 min de ban | test_J1 | |
+| J2 | config/nftables.conf, entrée et transfert en drop sauf lo, connexions établies, port 22 et icmp. service nftables activé au boot | test_J2_politique test_J2_ssh_ouvert | R65? (pare-feu local, a confirmer) |
+| J3 | Storage=persistent dans journald.conf.d | test_J3 | R71 |
 | J4 | analyse_logs.sh lit journalctl -u ssh, compte les échecs par IP, les comptes visés et les connexions réussies, sort avec un code different de 0 si une IP passe le seuil (10 par defaut, option -s) | test_J4_seuil_haut test_J4_seuil_zero test_J4_arguments | R71 |
-| D1 | unattended-upgrades avec un Origins-Pattern pour les depots Kali, 20auto-upgrades active le timer | test_D1_installe test_D1_active test_D1_origines_kali | R61 |
+| D1 | unattended-upgrades avec un Origins-Pattern pour les depots Kali, 20auto-upgrades active le timer | test_D1_installe test_D1_origines_kali | R61 |
 | B1 | sauvegarde.sh, rsync -aAXH --link-dest vers une version datée sur le 2e disque monté en /sauvegardes, on garde les 7 dernieres | test_B1_montage test_B1_versions test_B1_incrementale test_B1_acl | |
-| B2 | timer systemd sauvegarde.timer tous les jours a 2h, Persistent=true, sortie dans journalctl -u sauvegarde | test_B2_timer test_B2_journal | |
-| B3 | /sauvegardes en root:admins 0750 | test_B3_droits test_B3_acces | R50 |
+| B2 | timer systemd sauvegarde.timer tous les jours a 2h, Persistent=true, sortie dans journalctl -u sauvegarde | test_B2 | |
+| B3 | /sauvegardes en root:admins 0750 | test_B3 | R50 |
 | B4 | restauration testée (voir partie 4), verifier.sh restaure un fichier et un dossier avec ACL dans un dossier temporaire et compare | test_B4_fichier test_B4_acl | |
 | D2 | seul le port 22 écoute (ss -tulpn), une liste de services réseau inutiles est masquée par installer.sh si ils sont présents | test_D2_ssh test_D2_autres | R62 |
 | D3 | find -xdev qui enleve le droit o+w des fichiers hors /tmp et /var/tmp, liste des SUID plus bas | test_D3_modifiables test_D3_suid test_D3_suid_donnees | R54 R56 R57 |

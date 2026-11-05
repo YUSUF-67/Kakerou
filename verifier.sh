@@ -82,9 +82,6 @@ test_C2_projets() {
     droit C2 design     -w /srv/projets non
     droit C2 commercial -r /srv/projets non
     droit C2 freelance  -r /srv/projets non
-}
-
-test_C2_externe() {
     droit C2 freelance  -w /srv/projets/externe oui
     droit C2 design     -w /srv/projets/externe non
     droit C2 commercial -r /srv/projets/externe non
@@ -95,9 +92,6 @@ test_C2_maquettes() {
     droit C2 commercial -r /srv/maquettes oui
     droit C2 commercial -w /srv/maquettes non
     droit C2 freelance  -r /srv/maquettes non
-}
-
-test_C2_clients() {
     droit C2 commercial -w /srv/clients oui
     droit C2 dev        -r /srv/clients non
 }
@@ -109,9 +103,6 @@ test_C2_acl_defaut() {
     done
     if [[ -z $sans ]]; then ok "C2" "ACL par défaut présentes sur /srv"
     else ko "C2" "pas d'ACL par défaut :$sans"; fi
-}
-
-test_C2_heritage() {
     local dev design com f
     dev=$(membre dev); design=$(membre design); com=$(membre commercial)
     # touch et pas mktemp : mktemp cree en 0600, ce qui masquerait l'heritage
@@ -155,9 +146,6 @@ test_C3_aucun_autre() {
     done
     if [[ -z $trop ]]; then ok "C3" "aucun autre compte n'a sudo (freelance compris)"
     else ko "C3" "comptes avec sudo en trop :$trop"; fi
-}
-
-test_C3_script_root() {
     local s=/usr/local/sbin/analyse_logs.sh
     if [[ -f $s && $(stat -c '%U' "$s") == root && $(( 0$(stat -c '%a' "$s") & 022 )) -eq 0 ]]; then
         ok "C3" "analyse_logs.sh appartient à root et n'est modifiable que par lui"
@@ -168,12 +156,9 @@ test_C3_script_root() {
 
 # C4
 
-test_C4_root() {
+test_C4() {
     if [[ $(passwd -S root | awk '{print $2}') == L ]]; then ok "C4" "compte root verrouillé"
     else ko "C4" "compte root non verrouillé"; fi
-}
-
-test_C4_homes() {
     local u h ouverts=""
     for u in $(comptes_humains); do
         h=$(getent passwd "$u" | cut -d: -f6)
@@ -186,16 +171,13 @@ test_C4_homes() {
 
 # S1 à S5
 
-test_S1_config() {
+test_S1() {
     if [[ $(sshd_val passwordauthentication) == no && $(sshd_val pubkeyauthentication) == yes \
           && $(sshd_val kbdinteractiveauthentication) == no ]]; then
         ok "S1" "authentification par clé uniquement"
     else
         ko "S1" "mot de passe ou keyboard-interactive encore autorisé"
     fi
-}
-
-test_S1_methodes() {
     local rep
     rep=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
               -o PreferredAuthentications=none -o ConnectTimeout=5 verifier@127.0.0.1 true 2>&1)
@@ -213,11 +195,17 @@ test_S3() {
     else ko "S3" "AllowGroups vaut '$(sshd_val allowgroups)' (attendu : acces_ssh)"; fi
 }
 
-test_S4_essais() {
+test_S4() {
     local n
     n=$(sshd_val maxauthtries)
     if [[ -n $n && $n -le 4 ]]; then ok "S4" "MaxAuthTries = $n (<= 4)"
     else ko "S4" "MaxAuthTries = ${n:-?} (attendu : <= 4)"; fi
+    local v s
+    v=$(sshd_val channeltimeout | grep -o 'session=[0-9]*[smh]\?' | head -n1)
+    v=${v#session=}
+    s=$( [[ -n $v ]] && en_secondes "$v" )
+    if [[ -n $s && $s -gt 0 && $s -le 900 ]]; then ok "S4" "session inactive fermée après ${s}s (<= 900)"
+    else ko "S4" "pas de ChannelTimeout session <= 15 min (valeur : ${v:-aucune})"; fi
 }
 
 en_secondes() {
@@ -228,15 +216,6 @@ en_secondes() {
         *s) echo "${v%s}" ;;
         *)  echo "$v" ;;
     esac
-}
-
-test_S4_inactivite() {
-    local v s
-    v=$(sshd_val channeltimeout | grep -o 'session=[0-9]*[smh]\?' | head -n1)
-    v=${v#session=}
-    s=$( [[ -n $v ]] && en_secondes "$v" )
-    if [[ -n $s && $s -gt 0 && $s -le 900 ]]; then ok "S4" "session inactive fermée après ${s}s (<= 900)"
-    else ko "S4" "pas de ChannelTimeout session <= 15 min (valeur : ${v:-aucune})"; fi
 }
 
 test_S5() {
@@ -251,15 +230,12 @@ test_S5() {
 
 # J1
 
-test_J1_service() {
+test_J1() {
     if systemctl is-active --quiet fail2ban && fail2ban-client status sshd >/dev/null 2>&1; then
         ok "J1" "fail2ban actif et jail sshd en place"
     else
         ko "J1" "fail2ban inactif ou jail sshd absente"
     fi
-}
-
-test_J1_parametres() {
     local maxretry actions
     maxretry=$(fail2ban-client get sshd maxretry 2>/dev/null)
     actions=$(fail2ban-client get sshd actions 2>/dev/null)
@@ -278,6 +254,11 @@ test_J2_politique() {
     else
         ko "J2" "pas de politique drop sur l'entree"
     fi
+    if systemctl is-enabled --quiet nftables; then
+        ok "J2" "nftables active au demarrage (survit au reboot)"
+    else
+        ko "J2" "nftables non active au demarrage"
+    fi
 }
 
 test_J2_ssh_ouvert() {
@@ -288,25 +269,14 @@ test_J2_ssh_ouvert() {
     fi
 }
 
-test_J2_service() {
-    if systemctl is-enabled --quiet nftables; then
-        ok "J2" "nftables active au demarrage (survit au reboot)"
-    else
-        ko "J2" "nftables non active au demarrage"
-    fi
-}
-
 # J3
 
-test_J3_persistant() {
+test_J3() {
     if [[ -d /var/log/journal ]]; then
         ok "J3" "journal persistant : /var/log/journal present"
     else
         ko "J3" "/var/log/journal absent (journal non persistant)"
     fi
-}
-
-test_J3_config() {
     if systemd-analyze cat-config systemd/journald.conf 2>/dev/null | grep -qiE '^Storage=persistent'; then
         ok "J3" "Storage=persistent dans la configuration journald"
     else
@@ -356,9 +326,6 @@ test_D1_installe() {
     else
         ko "D1" "unattended-upgrades absent ou timer apt inactif"
     fi
-}
-
-test_D1_active() {
     if [[ $(apt-config dump APT::Periodic::Unattended-Upgrade 2>/dev/null) == *'"1"'* ]]; then
         ok "D1" "mises a jour automatiques activees (20auto-upgrades)"
     else
@@ -422,15 +389,12 @@ test_B1_acl() {
 
 # B2
 
-test_B2_timer() {
+test_B2() {
     if systemctl is-enabled --quiet sauvegarde.timer && systemctl is-active --quiet sauvegarde.timer; then
         ok "B2" "sauvegarde.timer activé ($(systemctl show -P TimersCalendar sauvegarde.timer | grep -o 'OnCalendar=[^;]*'))"
     else
         ko "B2" "sauvegarde.timer inactif ou non activé au démarrage"
     fi
-}
-
-test_B2_journal() {
     local r
     r=$(systemctl show -P Result sauvegarde.service)
     if journalctl -u sauvegarde.service -q --no-pager | grep -q 'version .* créée' && [[ $r == success ]]; then
@@ -442,14 +406,11 @@ test_B2_journal() {
 
 # B3
 
-test_B3_droits() {
+test_B3() {
     local d
     d=$(stat -c '%U:%G %a' "$SAUVEGARDES" 2>/dev/null)
     if [[ $d == "root:admins 750" ]]; then ok "B3" "$SAUVEGARDES en root:admins 0750"
     else ko "B3" "$SAUVEGARDES en ${d:-absent} (attendu : root:admins 750)"; fi
-}
-
-test_B3_acces() {
     droit B3 admins     -r "$SAUVEGARDES" oui
     droit B3 admins     -w "$SAUVEGARDES" non
     droit B3 dev        -r "$SAUVEGARDES" non
