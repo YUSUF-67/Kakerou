@@ -1,0 +1,11 @@
+# B2 - une version par nuit : 7 versions = une semaine d'historique
+[Unit]
+Description=Sauvegarde quotidienne a 2h
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+# VM eteinte a 2h : la sauvegarde manquee est lancee au demarrage
+Persistent=true
+
+[Install]
+WantedBy=timers.target

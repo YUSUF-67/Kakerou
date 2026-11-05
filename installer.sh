@@ -6,9 +6,14 @@ set -euo pipefail
 
 DEPOT="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="$DEPOT/config"
-PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades)
+PAQUETS=(acl sudo openssh-server fail2ban nftables unattended-upgrades rsync)
 # copies root:root 0755 hors du depot : personne d'autre ne peut les modifier
 SCRIPTS=(analyse_logs.sh sauvegarde.sh verifier.sh)
+DISQUE=/dev/sdb
+SAUVEGARDES=/sauvegardes
+# services reseau parfois presents sur Kali, inutiles pour un serveur de fichiers
+INUTILES=(apache2 nginx postgresql mariadb redis-server smbd nmbd rpcbind
+          avahi-daemon cups cups-browsed exim4 postfix xrdp vsftpd snmpd)
 
 erreur() { echo "ERREUR : $*" >&2; exit 1; }
 etape()  { echo "==> $*"; }
@@ -121,6 +126,58 @@ installer_maj_auto() {
     systemctl enable --now apt-daily-upgrade.timer
 }
 
+# --- partie 3 : sauvegarde et systeme ---
+
+preparer_disque() {
+    etape "second disque $DISQUE monté sur $SAUVEGARDES (B1)"
+    [[ -b $DISQUE ]] || erreur "$DISQUE absent : ajouter le disque de 2 Go à la VM"
+    # blkid echoue sur un disque vierge : on ne formate jamais un disque deja utilise
+    if ! blkid "$DISQUE" >/dev/null; then
+        mkfs.ext4 -q -L sauvegardes "$DISQUE"
+    fi
+    local uuid type
+    uuid="$(blkid -s UUID -o value "$DISQUE" || true)"
+    type="$(blkid -s TYPE -o value "$DISQUE" || true)"
+    [[ -n $uuid && -n $type ]] || erreur "$DISQUE contient des partitions ou un format inconnu : non modifié"
+    mkdir -p "$SAUVEGARDES"
+    # UUID : stable meme si le disque change de nom ; nofail : demarrage meme sans le disque
+    sed -i "\|[[:space:]]${SAUVEGARDES}[[:space:]]|d" /etc/fstab
+    echo "UUID=$uuid $SAUVEGARDES $type defaults,nofail,nodev,nosuid,noexec 0 2" >> /etc/fstab
+    systemctl daemon-reload
+    mountpoint -q "$SAUVEGARDES" || mount "$SAUVEGARDES"
+}
+
+proteger_sauvegardes() {
+    etape "$SAUVEGARDES réservé aux administrateurs (B3)"
+    # admins lisent sans sudo, seul root ecrit ; les autres ne traversent pas
+    chown root:admins "$SAUVEGARDES"
+    chmod 0750 "$SAUVEGARDES"
+}
+
+installer_timer() {
+    etape "sauvegarde planifiée chaque nuit, journalisée (B2)"
+    install -o root -g root -m 0644 "$CONFIG"/systemd/sauvegarde.{service,timer} /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable --now sauvegarde.timer
+    # premiere version tout de suite, sans attendre 2h
+    systemctl start sauvegarde.service
+}
+
+fermer_services() {
+    etape "services réseau inutiles arrêtés et masqués (D2)"
+    local unites
+    # seulement les unites installees : masquer une unite absente creerait un lien inutile
+    mapfile -t unites < <(systemctl list-unit-files --no-legend "${INUTILES[@]/%/.service}" "${INUTILES[@]/%/.socket}" | awk '{ print $1 }')
+    # mask : ni demarrage, ni activation par socket ou dbus
+    [[ ${#unites[@]} -eq 0 ]] || systemctl mask --now "${unites[@]}"
+}
+
+corriger_permissions() {
+    etape "aucun fichier modifiable par tous hors /tmp et /var/tmp (D3)"
+    # -xdev : / seulement, sans /proc, /sys, /dev, /run ni /sauvegardes
+    find / -xdev \( -path /tmp -o -path /var/tmp \) -prune -o -type f -perm -0002 -print -exec chmod o-w {} +
+}
+
 main() {
     [[ $EUID -eq 0 ]] || erreur "ce script doit être lancé en root"
     [[ $# -eq 0 ]] || erreur "usage : $0 (sans argument)"
@@ -136,6 +193,11 @@ main() {
     installer_journald
     installer_maj_auto
     # partie 3
+    preparer_disque
+    proteger_sauvegardes
+    installer_timer
+    fermer_services
+    corriger_permissions
     etape "terminé : lancer sudo verifier.sh"
 }
 

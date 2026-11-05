@@ -376,6 +376,166 @@ test_D1_origines_kali() {
 
 # partie 3
 
+SAUVEGARDES=/sauvegardes
+# versions datees, de la plus ancienne a la plus recente
+versions() { ls -1d "$SAUVEGARDES"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9][0-9][0-9][0-9][0-9] 2>/dev/null; }
+
+# B1
+
+test_B1_montage() {
+    local source options
+    read -r source options < <(findmnt --fstab -n -o SOURCE,OPTIONS "$SAUVEGARDES")
+    if mountpoint -q "$SAUVEGARDES" && [[ $source == UUID=* && $options == *nofail* ]]; then
+        ok "B1" "$SAUVEGARDES monté, déclaré par UUID avec nofail dans /etc/fstab"
+    else
+        ko "B1" "$SAUVEGARDES non monté ou absent de fstab (source=${source:-?}, options=${options:-?})"
+    fi
+}
+
+test_B1_versions() {
+    local n
+    n=$(versions | wc -l)
+    if [[ $n -ge 1 && $n -le 7 ]]; then ok "B1" "$n version(s) datée(s), 7 au plus"
+    else ko "B1" "$n version(s) datée(s) (attendu : de 1 à 7)"; fi
+}
+
+test_B1_incrementale() {
+    local a b f=etc/debian_version
+    a=$(versions | tail -n2 | head -n1); b=$(versions | tail -n1)
+    if [[ -z $a || $a == "$b" ]]; then ko "B1" "moins de 2 versions : lancer 2 fois systemctl start sauvegarde"; return; fi
+    if [[ $(stat -c %i "$a/$f") == $(stat -c %i "$b/$f") ]]; then
+        ok "B1" "$f inchangé : même inode dans ${a##*/} et ${b##*/} (lien dur, non recopié)"
+    else
+        ko "B1" "$f recopié entre ${a##*/} et ${b##*/} (sauvegarde non incrémentale)"
+    fi
+}
+
+test_B1_acl() {
+    local v
+    v=$(versions | tail -n1)
+    if [[ -n $v ]] && getfacl -p "$v/srv/projets" 2>/dev/null | grep -q '^default:group:dev:rwx'; then
+        ok "B1" "ACL de /srv/projets conservées dans ${v##*/}"
+    else
+        ko "B1" "ACL de /srv/projets absentes de la dernière version"
+    fi
+}
+
+# B2
+
+test_B2_timer() {
+    if systemctl is-enabled --quiet sauvegarde.timer && systemctl is-active --quiet sauvegarde.timer; then
+        ok "B2" "sauvegarde.timer activé ($(systemctl show -P TimersCalendar sauvegarde.timer | grep -o 'OnCalendar=[^;]*'))"
+    else
+        ko "B2" "sauvegarde.timer inactif ou non activé au démarrage"
+    fi
+}
+
+test_B2_journal() {
+    local r
+    r=$(systemctl show -P Result sauvegarde.service)
+    if journalctl -u sauvegarde.service -q --no-pager | grep -q 'version .* créée' && [[ $r == success ]]; then
+        ok "B2" "exécutions journalisées (journalctl -u sauvegarde), dernière réussie"
+    else
+        ko "B2" "aucune exécution réussie dans le journal (résultat : ${r:-?})"
+    fi
+}
+
+# B3
+
+test_B3_droits() {
+    local d
+    d=$(stat -c '%U:%G %a' "$SAUVEGARDES" 2>/dev/null)
+    if [[ $d == "root:admins 750" ]]; then ok "B3" "$SAUVEGARDES en root:admins 0750"
+    else ko "B3" "$SAUVEGARDES en ${d:-absent} (attendu : root:admins 750)"; fi
+}
+
+test_B3_acces() {
+    droit B3 admins     -r "$SAUVEGARDES" oui
+    droit B3 admins     -w "$SAUVEGARDES" non
+    droit B3 dev        -r "$SAUVEGARDES" non
+    droit B3 freelance  -r "$SAUVEGARDES" non
+}
+
+# B4
+
+# restaure dans un repertoire temporaire, sans toucher au systeme
+test_B4_fichier() {
+    local v t f=etc/hostname
+    v=$(versions | head -n1)
+    [[ -n $v ]] || { ko "B4" "aucune version à restaurer"; return; }
+    t=$(mktemp -d)
+    rsync -aAX "$v/$f" "$t/" 2>/dev/null
+    if cmp -s "$v/$f" "$t/${f##*/}" && [[ $(stat -c '%U %a' "$v/$f") == $(stat -c '%U %a' "$t/${f##*/}") ]]; then
+        ok "B4" "/$f restauré depuis ${v##*/} (contenu, propriétaire et droits identiques)"
+    else
+        ko "B4" "restauration de /$f depuis ${v##*/} incorrecte"
+    fi
+    rm -rf "$t"
+}
+
+test_B4_acl() {
+    local v t
+    v=$(versions | head -n1)
+    [[ -n $v ]] || { ko "B4" "aucune version à restaurer"; return; }
+    t=$(mktemp -d)
+    rsync -aAX -d "$v/srv/projets" "$t/" 2>/dev/null
+    if [[ $(getfacl -p --omit-header "$t/projets" 2>/dev/null) == $(getfacl -p --omit-header "$v/srv/projets" 2>/dev/null) ]] \
+       && getfacl -p "$t/projets" 2>/dev/null | grep -q '^group:'; then
+        ok "B4" "/srv/projets restauré depuis ${v##*/} avec ses ACL"
+    else
+        ko "B4" "ACL perdues à la restauration de /srv/projets"
+    fi
+    rm -rf "$t"
+}
+
+# D2
+
+# ecoutes hors loopback, sauf SSH et client DHCP (justifie dans le dossier)
+ecoutes_reseau() {
+    ss -Htulpn | awk '{ a = $5; p = a; sub(/.*:/, "", p); sub(/:[^:]*$/, "", a); sub(/%.*/, "", a)
+        if (a ~ /^(127\.|\[::1\]|\[::ffff:127\.)/ || p == 22 || p == 68 || p == 546) next
+        print $1 " " $5 " " $7 }'
+}
+
+test_D2_ssh() {
+    if ss -Htlpn 'sport = :22' | grep -q sshd; then ok "D2" "sshd écoute sur le port 22"
+    else ko "D2" "sshd n'écoute pas sur le port 22"; fi
+}
+
+test_D2_autres() {
+    local e
+    e=$(ecoutes_reseau)
+    if [[ -z $e ]]; then ok "D2" "aucune autre écoute joignable depuis le réseau (ss -tulpn)"
+    else ko "D2" "écoutes en trop : $(echo "$e" | tr '\n' ';')"; fi
+}
+
+# D3
+
+test_D3_modifiables() {
+    local f
+    f=$(find / -xdev \( -path /tmp -o -path /var/tmp \) -prune -o -type f -perm -0002 -print 2>/dev/null | head -n5)
+    if [[ -z $f ]]; then ok "D3" "aucun fichier modifiable par tous hors /tmp et /var/tmp"
+    else ko "D3" "fichiers modifiables par tous : $(echo "$f" | tr '\n' ' ')"; fi
+}
+
+# un SUID hors paquet n'a pas ete installe par la distribution
+test_D3_suid() {
+    local f inconnus="" n=0
+    while IFS= read -r f; do
+        n=$((n + 1))
+        dpkg -S "$f" >/dev/null 2>&1 || dpkg -S "${f#/usr}" >/dev/null 2>&1 || inconnus+=" $f"
+    done < <(find / -xdev -type f -perm -4000 2>/dev/null)
+    if [[ -z $inconnus ]]; then ok "D3" "$n fichiers SUID, tous fournis par un paquet (liste dans le dossier)"
+    else ko "D3" "SUID hors paquet :$inconnus"; fi
+}
+
+test_D3_suid_donnees() {
+    local f
+    f=$(find /home /srv /tmp /var/tmp -xdev -type f -perm /6000 2>/dev/null | head -n5)
+    if [[ -z $f ]]; then ok "D3" "aucun SUID/SGID dans /home, /srv, /tmp, /var/tmp"
+    else ko "D3" "SUID/SGID dans les données : $(echo "$f" | tr '\n' ' ')"; fi
+}
+
 main() {
     [[ $EUID -eq 0 ]] || { echo "ERREUR : ce script doit être lancé en root" >&2; exit 2; }
     [[ -r $CSV ]] || { echo "ERREUR : comptes.csv introuvable ($CSV)" >&2; exit 2; }
